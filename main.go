@@ -14,8 +14,7 @@ import (
 )
 
 var (
-	menuLinkSelector = cascadia.MustCompile("#defaultmenu a")
-	client           = http.Client{}
+	client = http.Client{}
 )
 
 func main() {
@@ -25,15 +24,21 @@ func main() {
 		Action: run,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
-				Name:        "mode",
-				Aliases:     []string{"m"},
-				Usage:       "The mode for crawling, either 'sitemap' or 'links', defaults to 'sitemap'",
-				DefaultText: "sitemap",
+				Name:    "mode",
+				Aliases: []string{"m"},
+				Usage:   "The mode for crawling, either 'sitemap' or 'links', defaults to 'sitemap'",
+				Value:   "sitemap",
 			},
 			&cli.StringSliceFlag{
 				Name:    "site",
 				Aliases: []string{"s"},
 				Usage:   "The site to crawl",
+			},
+			&cli.StringFlag{
+				Name:    "css3selector",
+				Aliases: []string{"c"},
+				Usage:   "The CSS3 selector to use to find links to crawl on the website, default to 'a' for all '<a>' tags",
+				Value:   "a",
 			},
 			&cli.IntFlag{
 				Name:    "concurrency",
@@ -63,16 +68,22 @@ func run(c *cli.Context) error {
 	}
 	concurrency := c.Int("concurrency")
 
-	var err error
 	for _, site := range sites {
 		if c.String("mode") == "links" {
-			err = crawlLinks(site, concurrency)
-		} else {
-			err = crawlSitemap(site+"/sitemap.xml", concurrency)
-		}
+			selector, err := cascadia.Compile(c.String("css3selector"))
+			if err != nil {
+				return err
+			}
 
-		if err != nil {
-			return err
+			err = crawlLinks(site, concurrency, selector)
+			if err != nil {
+				return err
+			}
+		} else {
+			err := crawlSitemap(site+"/sitemap.xml", concurrency)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -99,7 +110,7 @@ func crawlSitemap(url string, concurrency int) error {
 	})
 }
 
-func crawlLinks(startURL string, concurrency int) error {
+func crawlLinks(startURL string, concurrency int, selector cascadia.Selector) error {
 	req, err := http.NewRequest(http.MethodGet, startURL, nil)
 	if err != nil {
 		return err
@@ -120,10 +131,10 @@ func crawlLinks(startURL string, concurrency int) error {
 		return err
 	}
 
-	menuLinks := menuLinkSelector.MatchAll(htmlDoc)
+	links := selector.MatchAll(htmlDoc)
 	var sem = make(chan int, concurrency)
 
-	for _, link := range menuLinks {
+	for _, link := range links {
 		for _, attr := range link.Attr {
 			if attr.Key != "href" {
 				continue
