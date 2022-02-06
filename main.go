@@ -80,7 +80,11 @@ func run(c *cli.Context) error {
 				return err
 			}
 		} else {
-			err := crawlSitemap(site+"/sitemap.xml", concurrency)
+			url := site
+			if !strings.HasSuffix(url, ".xml") {
+				url += "/sitemap.xml"
+			}
+			err := crawlSitemap(url, concurrency)
 			if err != nil {
 				return err
 			}
@@ -91,7 +95,7 @@ func run(c *cli.Context) error {
 }
 
 func crawlSitemap(url string, concurrency int) error {
-	log.Printf("crawling sitemap index '%s'", url)
+	log.Printf("crawling sitemap '%s'", url)
 	var sem = make(chan int, concurrency)
 
 	return sitemap.ParseFromSite(url, func(e sitemap.Entry) error {
